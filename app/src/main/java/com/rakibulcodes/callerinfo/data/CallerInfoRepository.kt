@@ -24,17 +24,28 @@ class CallerInfoRepository(private val context: Context) {
         val number = sanitizeNumber(rawNumber)
         
         val cached = db.callerInfoDao().getCallerInfo(number)
-        if (cached != null) {
+        if (cached != null && cached.name != "Unknown") {
             return cached
+        }
+
+        if (!isNetworkAvailable()) {
+            return errorEntity(number, "No internet connection")
         }
 
         return fetchFromTelegram(number)
     }
 
+    private fun isNetworkAvailable(): Boolean {
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as android.net.ConnectivityManager
+        val activeNetwork = connectivityManager.activeNetwork ?: return false
+        val networkCapabilities = connectivityManager.getNetworkCapabilities(activeNetwork) ?: return false
+        return networkCapabilities.hasCapability(android.net.NetworkCapabilities.NET_CAPABILITY_INTERNET)
+    }
+
     suspend fun getAllHistory(): List<CallerInfoEntity> {
         return db.callerInfoDao().getAllCallerInfo()
     }
-    
+
     suspend fun clearHistory() {
         db.callerInfoDao().clearAll()
     }
@@ -57,6 +68,14 @@ class CallerInfoRepository(private val context: Context) {
             return@withContext errorEntity(number, "Telegram not connected")
         }
 
+        // --- PRE-FLIGHT CHECK ---
+        // 1. Join and mute the true_caller group
+        telegramManager.ensureJoined("true_caller", isBot = false)
+        
+        // 2. Search, unblock, start, and mute the TrueCalleRobot
+        telegramManager.ensureJoined("TrueCalleRobot", isBot = true)
+        // ------------------------
+
         try {
             val botUsername = "TrueCalleRobot"
             val searchResult = telegramManager.sendSuspend(TdApi.SearchPublicChat(botUsername))
@@ -65,7 +84,7 @@ class CallerInfoRepository(private val context: Context) {
             }
 
             val chatId = searchResult.id
-            
+
             val content = TdApi.InputMessageText(TdApi.FormattedText(number, null), null, true)
             val sentMsgId = try {
                 val msg = telegramManager.sendSuspend(TdApi.SendMessage(chatId, null, null, null, null, content))
@@ -82,13 +101,19 @@ class CallerInfoRepository(private val context: Context) {
                             val msg = obj.message
                             if (msg.chatId == chatId && !msg.isOutgoing && msg.id > sentMsgId) {
                                 val textObj = (msg.content as? TdApi.MessageText)?.text
-                                textObj != null && !textObj.text.contains("Searching...")
+                                if (textObj != null) {
+                                    val txt = textObj.text
+                                    !txt.contains("Searching...") && (txt.contains("Country:", true) || txt.contains("Not Found", true) || txt.contains("exceeded", true) || txt.contains("Says:", true) || txt.contains("Name:", true))
+                                } else false
                             } else false
                         }
                         is TdApi.UpdateMessageContent -> {
                             if (obj.chatId == chatId && obj.messageId > sentMsgId) {
                                 val textObj = (obj.newContent as? TdApi.MessageText)?.text
-                                textObj != null && !textObj.text.contains("Searching...")
+                                if (textObj != null) {
+                                    val txt = textObj.text
+                                    !txt.contains("Searching...") && (txt.contains("Country:", true) || txt.contains("Not Found", true) || txt.contains("exceeded", true) || txt.contains("Says:", true) || txt.contains("Name:", true))
+                                } else false
                             } else false
                         }
                         else -> false

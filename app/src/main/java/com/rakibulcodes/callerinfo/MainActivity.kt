@@ -1,9 +1,14 @@
 package com.rakibulcodes.callerinfo
 
+import android.app.role.RoleManager
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.net.ConnectivityManager
+import android.net.Network
+import android.net.NetworkCapabilities
+import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
 import android.provider.Settings
@@ -19,6 +24,7 @@ import androidx.appcompat.app.AppCompatActivity
 import androidx.appcompat.app.AppCompatDelegate
 import android.content.res.ColorStateList
 import android.os.PowerManager
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.core.content.ContextCompat
 import androidx.core.view.GestureDetectorCompat
 import androidx.core.widget.doAfterTextChanged
@@ -45,6 +51,16 @@ class MainActivity : AppCompatActivity() {
     private lateinit var telegramManager: TelegramManager
     private lateinit var historyAdapter: HistoryAdapter
     private lateinit var gestureDetector: GestureDetectorCompat
+    private var networkCallback: ConnectivityManager.NetworkCallback? = null
+    private var isLoggingInFlow = false
+
+    private val roleRequestLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
+        if (result.resultCode == RESULT_OK) {
+            Toast.makeText(this, "Call Screening role granted", Toast.LENGTH_SHORT).show()
+        } else {
+            Toast.makeText(this, "Call Screening role denied. Automatic Caller ID might not work on Android 10+.", Toast.LENGTH_LONG).show()
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         val prefs = getSharedPreferences("Settings", Context.MODE_PRIVATE)
@@ -59,15 +75,44 @@ class MainActivity : AppCompatActivity() {
         telegramManager = TelegramManager.getInstance(applicationContext)
         initializeUI()
         observeTelegramState()
-        
+
+        setupNetworkListener()
         checkForUpdates()
+    }
+
+    private fun setupNetworkListener() {
+        if (ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_NETWORK_STATE) != PackageManager.PERMISSION_GRANTED) {
+            return
+        }
+        val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val networkRequest = NetworkRequest.Builder()
+            .addCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET)
+            .build()
+
+        networkCallback = object : ConnectivityManager.NetworkCallback() {
+            override fun onAvailable(network: Network) {
+                super.onAvailable(network)
+                if (telegramManager.isReady()) {
+                    telegramManager.reconnect()
+                }
+            }
+        }
+        connectivityManager.registerNetworkCallback(networkRequest, networkCallback!!)
+    }
+
+    override fun onDestroy() {
+        super.onDestroy()
+        networkCallback?.let {
+            val connectivityManager = getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+            connectivityManager.unregisterNetworkCallback(it)
+        }
     }
 
     private fun checkForUpdates() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
-                // Replace this URL with where your website is actually hosted
-                val updateUrl = "https://your-domain.com/version.json" 
+                // Official update source
+                val updateUrl = "https://rakibulcodes.com/caller-info/version.json" 
                 
                 val request = Request.Builder()
                     .url(updateUrl)
@@ -161,9 +206,10 @@ class MainActivity : AppCompatActivity() {
             shareResult(textToShare)
         }
 
+        // About section listeners
         binding.cardOfficialWebsite.setOnClickListener { openUrl("https://apps.rakibulcodes.com/caller-info") }
         binding.cardSourceCode.setOnClickListener { openUrl("https://github.com/rakibulcodes/caller-info") }
-        binding.btnInfoWebsite.setOnClickListener { openUrl("https://apps.rakibulcodes.com/caller-info") }
+        binding.btnInfoWebsite.setOnClickListener { openUrl("https://rakibulcodes.com") }
         binding.btnInfoGithub.setOnClickListener { openUrl("https://github.com/rakibulcodes") }
 
         try {
@@ -202,26 +248,30 @@ class MainActivity : AppCompatActivity() {
         binding.tilLoginCode.visibility = View.GONE
         binding.til2faPassword.visibility = View.GONE
         binding.btnLoginTelegram.isEnabled = true
+        binding.btnLoginTelegram.text = "Login"
 
         when (state.constructor) {
+            TdApi.AuthorizationStateWaitTdlibParameters.CONSTRUCTOR -> {
+                binding.tvLoginStatus.text = "Enter API details & phone numbers to proceed."
+            }
             TdApi.AuthorizationStateWaitPhoneNumber.CONSTRUCTOR -> {
-                val phone = binding.etTelegramPhone.text.toString().trim()
-                val appId = binding.etAppId.text.toString().trim()
-                
-                if (phone.isNotEmpty() && appId.isNotEmpty()) {
-                    binding.tvLoginStatus.text = "Credentials provided. Tap Connect to login."
-                    binding.btnLoginTelegram.text = "Connect"
-                } else {
-                    binding.tvLoginStatus.text = "Enter API details & phone numbers to proceed."
-                    binding.btnLoginTelegram.text = "Connect"
+                binding.tvLoginStatus.text = "Enter API details & phone numbers to proceed."
+                if (isLoggingInFlow) {
+                    binding.tvLoginStatus.text = "Connecting..."
+                    val phone = binding.etTelegramPhone.text.toString().trim()
+                    if (phone.isNotEmpty()) {
+                        telegramManager.send(TdApi.SetAuthenticationPhoneNumber(phone, null)) { }
+                    }
                 }
             }
             TdApi.AuthorizationStateWaitCode.CONSTRUCTOR -> {
+                isLoggingInFlow = false
                 binding.tvLoginStatus.text = "Enter code sent to Telegram"
                 binding.tilLoginCode.visibility = View.VISIBLE
                 binding.btnLoginTelegram.text = "Verify Code"
             }
             TdApi.AuthorizationStateWaitPassword.CONSTRUCTOR -> {
+                isLoggingInFlow = false
                 binding.tvLoginStatus.text = "Enter your 2FA password"
                 binding.til2faPassword.visibility = View.VISIBLE
                 binding.btnLoginTelegram.text = "Submit Password"
@@ -230,10 +280,9 @@ class MainActivity : AppCompatActivity() {
                 binding.tvLoginStatus.text = "Logged in successfully!"
                 binding.btnLoginTelegram.text = "Logout"
                 updateStatusIndicator(getSharedPreferences("Settings", MODE_PRIVATE).getBoolean("enabled", false))
-            }
-            TdApi.AuthorizationStateLoggingOut.CONSTRUCTOR -> {
-                binding.tvLoginStatus.text = "Logging out..."
-                binding.btnLoginTelegram.isEnabled = false
+                
+                // Join groups/bots once logged in
+                telegramManager.performInitialSetup()
             }
         }
     }
@@ -365,22 +414,41 @@ class MainActivity : AppCompatActivity() {
         }
 
         binding.switchEnable.setOnCheckedChangeListener { _, isChecked ->
-            if (isChecked && (!hasAllPermissions() || !telegramManager.isReady())) {
-                binding.switchEnable.isChecked = false
+            if (isChecked) {
                 if (!telegramManager.isReady()) {
+                    binding.switchEnable.isChecked = false
                     binding.bottomNavigation.selectedItemId = R.id.nav_settings
                     com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
                         .setTitle("Setup Required")
                         .setMessage("Please complete the Telegram login first before enabling Caller ID.")
                         .setPositiveButton("OK", null)
                         .show()
-                } else {
-                    promptForPermissions()
+                    return@setOnCheckedChangeListener
                 }
-                return@setOnCheckedChangeListener
+                
+                if (!hasAllPermissions()) {
+                    binding.switchEnable.isChecked = false
+                    promptForPermissions()
+                    return@setOnCheckedChangeListener
+                }
+
+                // Check for Call Screening Role on Android 10+
+                if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+                    val roleManager = getSystemService(RoleManager::class.java)
+                    if (roleManager?.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING) == true &&
+                        !roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
+                        val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                        roleRequestLauncher.launch(intent)
+                    }
+                }
             }
             prefs.edit().putBoolean("enabled", isChecked).apply()
             updateStatusIndicator(isChecked)
+            
+            // Re-setup network listener if it was skipped due to missing permission
+            if (isChecked && networkCallback == null) {
+                setupNetworkListener()
+            }
         }
 
         binding.switchLookupKnown.setOnCheckedChangeListener { _, isChecked ->
@@ -411,8 +479,13 @@ class MainActivity : AppCompatActivity() {
         }
 
         val currentState = telegramManager.authState.replayCache.firstOrNull() ?: return
+        
+        isLoggingInFlow = true
 
         when (currentState.constructor) {
+            TdApi.AuthorizationStateWaitTdlibParameters.CONSTRUCTOR -> {
+                telegramManager.sendTdlibParameters(appIdStr.toIntOrNull() ?: 0, appHash)
+            }
             TdApi.AuthorizationStateWaitPhoneNumber.CONSTRUCTOR -> {
                 telegramManager.send(TdApi.SetAuthenticationPhoneNumber(phone, null)) { }
             }
@@ -566,7 +639,7 @@ class MainActivity : AppCompatActivity() {
                         else -> perm.substringAfterLast(".")
                     }
                 }
-                issues.add("Missing: $names")
+                issues.add("Missing permissions: $names")
             }
             if (overlayMissing) issues.add("Overlay required")
             
@@ -579,6 +652,11 @@ class MainActivity : AppCompatActivity() {
             binding.permissionWarning.text = spannableString
         } else {
             binding.permissionWarning.visibility = View.GONE
+        }
+        
+        // Ensure network listener is active if permission is granted
+        if (networkCallback == null && ContextCompat.checkSelfPermission(this, android.Manifest.permission.ACCESS_NETWORK_STATE) == PackageManager.PERMISSION_GRANTED) {
+            setupNetworkListener()
         }
     }
 
@@ -838,4 +916,3 @@ class MainActivity : AppCompatActivity() {
         }
     }
 }
-
