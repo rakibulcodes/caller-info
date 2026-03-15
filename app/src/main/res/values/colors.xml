@@ -1,0 +1,78 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="black">#FF000000</color>
+    <color name="white">#FFFFFFFF</color>
+    <color name="light_gray">#E8EAED</color>
+
+    <!-- Monochrome Light Palette -->
+    <color name="primary_light">#000000</color>
+    <color name="on_primary_light">#FFFFFF</color>
+    <color name="primary_container_light">#F2F2F7</color>
+    <color name="on_primary_container_light">#000000</color>
+    <color name="secondary_light">#636366</color>
+    <color name="on_secondary_light">#FFFFFF</color>
+    <color name="secondary_container_light">#E5E5EA</color>
+    <color name="on_secondary_container_light">#1C1C1E</color>
+    <color name="tertiary_light">#3A3A3C</color>
+    <color name="on_tertiary_light">#FFFFFF</color>
+    <color name="tertiary_container_light">#F2F2F7</color>
+    <color name="on_tertiary_container_light">#000000</color>
+    <color name="error_light">#FF453A</color>
+    <color name="on_error_light">#FFFFFF</color>
+    <color name="error_container_light">#FFF1F0</color>
+    <color name="on_error_container_light">#66001A</color>
+    <color name="background_light">#FFFFFF</color>
+    <color name="on_background_light">#000000</color>
+    <color name="surface_light">#FFFFFF</color>
+    <color name="on_surface_light">#000000</color>
+    <color name="surface_variant_light">#F2F2F7</color>
+    <color name="on_surface_variant_light">#8E8E93</color>
+    <color name="outline_light">#C7C7CC</color>
+
+    <!-- Monochrome Dark Palette -->
+    <color name="primary_dark">#FFFFFF</color>
+    <color name="on_primary_dark">#000000</color>
+    <color name="primary_container_dark">#2C2C2E</color>
+    <color name="on_primary_container_dark">#FFFFFF</color>
+    <color name="secondary_dark">#AEAEB2</color>
+    <color name="on_secondary_dark">#1C1C1E</color>
+    <color name="secondary_container_dark">#2C2C2E</color>
+    <color name="on_secondary_container_dark">#FFFFFF</color>
+    <color name="tertiary_dark">#C7C7CC</color>
+    <color name="on_tertiary_dark">#000000</color>
+    <color name="tertiary_container_dark">#3A3A3C</color>
+    <color name="on_tertiary_container_dark">#FFFFFF</color>
+    <color name="error_dark">#FF453A</color>
+    <color name="on_error_dark">#FFFFFF</color>
+    <color name="error_container_dark">#3D0008</color>
+    <color name="on_error_container_dark">#FFB4AB</color>
+    <color name="background_dark">#121212</color>
+    <color name="on_background_dark">#FFFFFF</color>
+    <color name="surface_dark">#121212</color>
+    <color name="on_surface_dark">#FFFFFF</color>
+    <color name="surface_variant_dark">#1C1C1E</color>
+    <color name="on_surface_variant_dark">#8E8E93</color>
+    <color name="outline_dark">#3A3A3C</color>
+
+    <color name="divider">#38383A</color>
+    <color name="divider_light">#E5E5EA</color>
+
+    <!-- Status Colors -->
+    <color name="status_active">#30D158</color>
+    <color name="status_inactive">#FF453A</color>
+
+    <!-- Notification -->
+    <color name="notification_accent">#FFFFFF</color>
+    <color name="notification_bg_light">#FFFFFF</color>
+    <color name="notification_bg_dark">#1C1C1E</color>
+
+    <!-- Overlay glassmorphism (always dark-glass) -->
+    <color name="overlay_glass_bg">#DD1C1C1E</color>
+    <color name="overlay_glass_stroke">#40FFFFFF</color>
+    <color name="overlay_pill_bg">#30FFFFFF</color>
+    <color name="overlay_info_block_bg">#22FFFFFF</color>
+    <color name="overlay_text_primary">#FFFFFFFF</color>
+    <color name="overlay_text_secondary">#BBFFFFFF</color>
+    <color name="overlay_error">#FF453A</color>
+    <color name="overlay_ripple">#33FFFFFF</color>
+</resources>
