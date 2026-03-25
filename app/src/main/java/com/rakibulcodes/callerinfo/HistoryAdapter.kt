@@ -3,11 +3,18 @@ package com.rakibulcodes.callerinfo
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.RecyclerView
 import com.rakibulcodes.callerinfo.data.database.CallerInfoEntity
 import com.rakibulcodes.callerinfo.databinding.ItemHistoryCardBinding
 
-class HistoryAdapter(private var items: List<CallerInfoEntity>) :
+class HistoryAdapter(
+    private var items: List<CallerInfoEntity>,
+    private val onSave: (CallerInfoEntity) -> Unit,
+    private val onCopy: (CallerInfoEntity) -> Unit,
+    private val onShare: (CallerInfoEntity) -> Unit,
+    private val onDelete: (CallerInfoEntity) -> Unit
+) :
     RecyclerView.Adapter<HistoryAdapter.ViewHolder>() {
 
     class ViewHolder(val binding: ItemHistoryCardBinding) : RecyclerView.ViewHolder(binding.root)
@@ -57,6 +64,11 @@ class HistoryAdapter(private var items: List<CallerInfoEntity>) :
             tvTime.visibility = View.VISIBLE
             tvTime.text = getShortTimeSpan(item.timestamp)
         }
+
+        holder.binding.btnHistorySave.setOnClickListener { onSave(item) }
+        holder.binding.btnHistoryCopy.setOnClickListener { onCopy(item) }
+        holder.binding.btnHistoryShare.setOnClickListener { onShare(item) }
+        holder.binding.btnHistoryDelete.setOnClickListener { onDelete(item) }
     }
 
     private fun getShortTimeSpan(time: Long): String {
@@ -76,8 +88,21 @@ class HistoryAdapter(private var items: List<CallerInfoEntity>) :
     override fun getItemCount() = items.size
 
     fun updateData(newItems: List<CallerInfoEntity>) {
+        val diffResult = DiffUtil.calculateDiff(object : DiffUtil.Callback() {
+            override fun getOldListSize(): Int = items.size
+
+            override fun getNewListSize(): Int = newItems.size
+
+            override fun areItemsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                return items[oldItemPosition].number == newItems[newItemPosition].number
+            }
+
+            override fun areContentsTheSame(oldItemPosition: Int, newItemPosition: Int): Boolean {
+                return items[oldItemPosition] == newItems[newItemPosition]
+            }
+        })
         items = newItems
-        notifyDataSetChanged()
+        diffResult.dispatchUpdatesTo(this)
     }
 }
 

@@ -22,6 +22,9 @@ class CallerInfoRepository(private val context: Context) {
 
     suspend fun getCallerInfo(rawNumber: String): CallerInfoEntity {
         val number = sanitizeNumber(rawNumber)
+        if (number.isEmpty()) {
+            return errorEntity(rawNumber.trim(), "Invalid Number")
+        }
         
         val cached = db.callerInfoDao().getCallerInfo(number)
         if (cached != null && cached.name != "Unknown") {
@@ -54,13 +57,45 @@ class CallerInfoRepository(private val context: Context) {
         db.callerInfoDao().deleteByNumber(number)
     }
 
-    private fun sanitizeNumber(input: String): String {
-        var cleaned = input.replace(Regex("[^0-9+]"), "")
-        if (cleaned.isEmpty()) return ""
-        if (cleaned.startsWith("+")) return cleaned
-        if (cleaned.startsWith("00")) return "+" + cleaned.substring(2)
-        if (cleaned.startsWith("0")) cleaned = cleaned.substring(1)
-        return "+880$cleaned"
+    fun sanitizeNumber(input: String): String {
+        // 1. Strip everything except digits and '+', ensuring only one leading '+' survives
+        var digits = input.replace(Regex("[^0-9+]"), "")
+        if (digits.isEmpty()) return ""
+        
+        val hasLeadingPlus = digits.startsWith("+")
+        digits = digits.replace("+", "")
+        if (hasLeadingPlus) digits = "+$digits"
+
+        // 2. Convert standard international dialing codes to '+'
+        when {
+            digits.startsWith("00") -> digits = "+" + digits.substring(2)
+            digits.startsWith("011") -> digits = "+" + digits.substring(3)
+        }
+
+        // 3. Smart Default to Bangladesh format for non-international inputs
+        if (!digits.startsWith("+")) {
+            digits = when {
+                digits.startsWith("0880") -> "+" + digits.substring(1) // Catches '0880' typo
+                digits.startsWith("880") -> "+$digits"                 // Catches missing '+'
+                digits.startsWith("0") && digits.length == 11 -> "+88$digits" // Standard local (017...)
+                digits.length == 10 -> "+880$digits"                   // Missing '0' (17...)
+                else -> digits
+            }
+        }
+
+        // 4. Final Validation
+        return when {
+            // Valid BD: Must be exactly 14 chars (+880 + 10 digits), and the 5th char (index 4) must be 1-9
+            digits.startsWith("+880") -> {
+                if (digits.length == 14 && digits[4] in '1'..'9') digits else ""
+            }
+            // Valid International: Starts with '+' followed by 7 to 15 digits (Total length 8 to 16)
+            digits.startsWith("+") -> {
+                if (digits.length in 8..16) digits else ""
+            }
+            // Unrecognized format
+            else -> ""
+        }
     }
 
     private suspend fun fetchFromTelegram(number: String): CallerInfoEntity = withContext(Dispatchers.IO) {
@@ -103,7 +138,15 @@ class CallerInfoRepository(private val context: Context) {
                                 val textObj = (msg.content as? TdApi.MessageText)?.text
                                 if (textObj != null) {
                                     val txt = textObj.text
-                                    !txt.contains("Searching...") && (txt.contains("Country:", true) || txt.contains("Not Found", true) || txt.contains("exceeded", true) || txt.contains("Says:", true) || txt.contains("Name:", true))
+                                    !txt.contains("Searching...") && (
+                                        txt.contains("Country:", true) ||
+                                            txt.contains("Not Found", true) ||
+                                            txt.contains("exceeded", true) ||
+                                            txt.contains("Says:", true) ||
+                                            txt.contains("Name:", true) ||
+                                            txt.contains("invalid number", true) ||
+                                            txt.contains("Oops", true)
+                                        )
                                 } else false
                             } else false
                         }
@@ -112,7 +155,15 @@ class CallerInfoRepository(private val context: Context) {
                                 val textObj = (obj.newContent as? TdApi.MessageText)?.text
                                 if (textObj != null) {
                                     val txt = textObj.text
-                                    !txt.contains("Searching...") && (txt.contains("Country:", true) || txt.contains("Not Found", true) || txt.contains("exceeded", true) || txt.contains("Says:", true) || txt.contains("Name:", true))
+                                    !txt.contains("Searching...") && (
+                                        txt.contains("Country:", true) ||
+                                            txt.contains("Not Found", true) ||
+                                            txt.contains("exceeded", true) ||
+                                            txt.contains("Says:", true) ||
+                                            txt.contains("Name:", true) ||
+                                            txt.contains("invalid number", true) ||
+                                            txt.contains("Oops", true)
+                                        )
                                 } else false
                             } else false
                         }
@@ -137,8 +188,13 @@ class CallerInfoRepository(private val context: Context) {
             
             if (finalResult.error == null || finalResult.error == "Internal Processing Error") {
                 val prefs = context.getSharedPreferences("Settings", Context.MODE_PRIVATE)
-                val limit = prefs.getString("max_history_size", "100")?.toIntOrNull() ?: 100
-                db.callerInfoDao().insertAndTrim(finalResult, limit)
+                val limitStr = prefs.getString("max_history_size", "1000")
+                if (limitStr == "Unlimited") {
+                    db.callerInfoDao().insertCallerInfo(finalResult)
+                } else {
+                    val limit = limitStr?.toIntOrNull() ?: 1000
+                    db.callerInfoDao().insertAndTrim(finalResult, limit)
+                }
             }
             finalResult
 
@@ -177,7 +233,9 @@ class CallerInfoRepository(private val context: Context) {
         
         var error: String? = "Internal Processing Error"
         
-        if (responseText.contains("exceeded your daily search limit", ignoreCase = true)) {
+        if (responseText.contains("invalid number", ignoreCase = true) || responseText.contains("Oops", ignoreCase = true)) {
+            error = "Invalid Number"
+        } else if (responseText.contains("exceeded your daily search limit", ignoreCase = true)) {
             val timeMatch = Regex("reset in\\s+(.*?)$", RegexOption.IGNORE_CASE).find(responseText)
             error = "Daily Limit Exceeded"
             if (timeMatch != null) {

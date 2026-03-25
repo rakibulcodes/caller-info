@@ -10,8 +10,88 @@
     app:cardElevation="0dp"
     app:strokeWidth="0dp">
 
-    <include
-        android:id="@+id/cardContent"
-        layout="@layout/layout_caller_info_card_content" />
+    <LinearLayout
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:orientation="vertical">
+
+        <include
+            android:id="@+id/cardContent"
+            layout="@layout/layout_caller_info_card_content" />
+
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:layout_marginStart="16dp"
+            android:layout_marginEnd="16dp"
+            android:layout_marginTop="0dp"
+            android:layout_marginBottom="12dp"
+            android:orientation="horizontal">
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnHistorySave"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="4dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:text="@string/btn_save"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                app:cornerRadius="50dp"
+                app:icon="@drawable/ic_save_contact"
+                app:iconPadding="6dp"
+                app:iconSize="14dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnHistoryCopy"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="4dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:text="@string/btn_copy"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                app:cornerRadius="50dp"
+                app:icon="@drawable/ic_copy"
+                app:iconPadding="6dp"
+                app:iconSize="14dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnHistoryShare"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:layout_marginEnd="4dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:text="@string/btn_share"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                app:cornerRadius="50dp"
+                app:icon="@drawable/ic_share"
+                app:iconPadding="6dp"
+                app:iconSize="14dp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btnHistoryDelete"
+                style="?attr/materialButtonOutlinedStyle"
+                android:layout_width="wrap_content"
+                android:layout_height="36dp"
+                android:minWidth="0dp"
+                android:paddingHorizontal="10dp"
+                android:text="@string/btn_delete"
+                android:textAllCaps="false"
+                android:textSize="12sp"
+                app:cornerRadius="50dp"
+                app:icon="@drawable/ic_delete"
+                app:iconPadding="6dp"
+                app:iconSize="14dp" />
+
+        </LinearLayout>
+    </LinearLayout>
 
 </com.google.android.material.card.MaterialCardView>

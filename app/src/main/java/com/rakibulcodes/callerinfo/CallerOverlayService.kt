@@ -2,18 +2,22 @@ package com.rakibulcodes.callerinfo
 
 import android.annotation.SuppressLint
 import android.app.Service
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.Context
 import android.content.Intent
 import android.content.res.Configuration
 import android.graphics.PixelFormat
 import android.os.Build
 import android.os.IBinder
+import android.provider.ContactsContract
 import android.view.*
 import android.content.res.ColorStateList
 import android.view.animation.AccelerateInterpolator
 import android.view.animation.OvershootInterpolator
 import android.widget.LinearLayout
 import android.widget.TextView
+import android.widget.Toast
 import androidx.appcompat.app.AppCompatDelegate
 import androidx.appcompat.view.ContextThemeWrapper
 import com.google.android.material.button.MaterialButton
@@ -66,6 +70,7 @@ class CallerOverlayService : Service() {
 
             val displayMetrics = resources.displayMetrics
             val screenWidth = displayMetrics.widthPixels
+            val screenHeight = displayMetrics.heightPixels
             val isLandscape = resources.configuration.orientation == Configuration.ORIENTATION_LANDSCAPE
             
             // Calculate width with a max limit for landscape/tablets
@@ -89,7 +94,8 @@ class CallerOverlayService : Service() {
             )
             
             params?.gravity = Gravity.CENTER
-            params?.y = if (isLandscape) 150 else -300
+            // Use percentage of screen height for Y offset
+            params?.y = if (isLandscape) (screenHeight * 0.15f).toInt() else -(screenHeight * 0.15f).toInt()
 
             overlayView?.let { view ->
                 // Set status indicator color
@@ -123,6 +129,43 @@ class CallerOverlayService : Service() {
                     rowLocation.visibility = View.VISIBLE
                 } else {
                     rowLocation.visibility = View.GONE
+                }
+
+                val resolvedName = name?.takeIf { it.isNotBlank() } ?: "Unknown"
+                val shareText = buildOverlayShareText(
+                    number = number,
+                    name = resolvedName,
+                    carrier = carrier,
+                    country = country,
+                    email = email,
+                    location = location
+                )
+
+                view.findViewById<View>(R.id.btnOverlaySave).setOnClickListener {
+                    val insertIntent = Intent(ContactsContract.Intents.Insert.ACTION).apply {
+                        type = ContactsContract.RawContacts.CONTENT_TYPE
+                        putExtra(ContactsContract.Intents.Insert.NAME, resolvedName)
+                        putExtra(ContactsContract.Intents.Insert.PHONE, number)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(insertIntent)
+                }
+
+                view.findViewById<View>(R.id.btnOverlayCopy).setOnClickListener {
+                    val clipboard = getSystemService(Context.CLIPBOARD_SERVICE) as ClipboardManager
+                    clipboard.setPrimaryClip(ClipData.newPlainText("caller_info_overlay", shareText))
+                    Toast.makeText(this, "Copied", Toast.LENGTH_SHORT).show()
+                }
+
+                view.findViewById<View>(R.id.btnOverlayShare).setOnClickListener {
+                    val shareIntent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, shareText)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(Intent.createChooser(shareIntent, "Share via").apply {
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    })
                 }
 
                 // Handle close button click
@@ -226,13 +269,15 @@ class CallerOverlayService : Service() {
         overlayView?.let { view ->
             val displayMetrics = resources.displayMetrics
             val screenWidth = displayMetrics.widthPixels
+            val screenHeight = displayMetrics.heightPixels
             val isLandscape = newConfig.orientation == Configuration.ORIENTATION_LANDSCAPE
             
             val maxWidthPx = (420 * displayMetrics.density).toInt()
             val preferredWidth = (screenWidth * 0.95).toInt()
             
             params?.width = if (preferredWidth > maxWidthPx) maxWidthPx else preferredWidth
-            params?.y = if (isLandscape) 200 else -500
+            // Update Y offset using percentage on configuration change
+            params?.y = if (isLandscape) (screenHeight * 0.15f).toInt() else -(screenHeight * 0.15f).toInt()
 
             try {
                 windowManager?.updateViewLayout(view, params)
@@ -254,6 +299,26 @@ class CallerOverlayService : Service() {
     private fun removeOverlay() {
         removeOverlayInternal()
         stopSelf()
+    }
+
+    private fun buildOverlayShareText(
+        number: String,
+        name: String,
+        carrier: String?,
+        country: String?,
+        email: String?,
+        location: String?
+    ): String {
+        val sb = StringBuilder()
+        sb.append("Name: ").append(name)
+        sb.append("\nNumber: ").append(number)
+
+        val carrierText = listOfNotNull(carrier, country).joinToString(", ")
+        if (carrierText.isNotEmpty()) sb.append("\n").append(carrierText)
+        if (!email.isNullOrEmpty()) sb.append("\nEmail: ").append(email)
+        if (!location.isNullOrEmpty()) sb.append("\nLocation: ").append(location)
+
+        return sb.toString()
     }
 
     override fun onDestroy() {

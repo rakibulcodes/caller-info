@@ -9,9 +9,9 @@
     <string name="menu_settings">Settings</string>
     <string name="menu_about">About</string>
     <string name="settings_title">Settings</string>
-    <string name="header_protection">Protection</string>
-    <string name="label_background_caller_id">Incoming Caller ID</string>
-    <string name="desc_background_caller_id">Show info overlay for unknown numbers</string>
+    <string name="header_protection">Live Identification</string>
+    <string name="label_background_caller_id">Live Caller ID</string>
+    <string name="desc_background_caller_id">Display a floating contact card when an unknown number rings</string>
     <string name="header_api_configuration">Telegram Setup</string>
     <string name="hint_app_id">App ID</string>
     <string name="hint_app_hash">App Hash</string>
@@ -31,8 +31,10 @@
     <string name="helper_phone_format">e.g. +8801712345678 or 01712345678</string>
     <string name="btn_search">Search</string>
     <string name="label_result">Result</string>
+    <string name="btn_save">Save</string>
     <string name="btn_copy">Copy</string>
     <string name="btn_share">Share</string>
+    <string name="btn_delete">Delete</string>
     <string name="msg_history_cleared">History cleared</string>
     <string name="empty_history_title">No history yet</string>
     <string name="empty_history_subtitle">Your search history will appear here</string>
@@ -48,5 +50,8 @@
     <string name="hint_password">Password (2FA)</string>
     <string name="btn_login_telegram">Login to Telegram</string>
     <string name="msg_battery_opt">To ensure the caller ID overlay works correctly in the background, please disable battery optimization for this app. Tap here to open settings.</string>
-    <string name="label_setup_instructions">Follow these steps to connect with Telegram:\n1. Get API ID and Hash from https://my.telegram.org\n2. Enter your phone number below\n3. Login with your code</string>
+    <string name="label_setup_instructions">Follow these steps to connect with Telegram:\n1. Get API ID and Hash from https://my.telegram.org\n2. Enter your phone number below\n3. Login with your code &amp; password</string>
+    <string name="error_empty_field">Cannot be empty</string>
+    <string name="error_max_history_range">Must be between 100 and 10000</string>
+    <string name="msg_max_history_saved">Max history size saved</string>
 </resources>

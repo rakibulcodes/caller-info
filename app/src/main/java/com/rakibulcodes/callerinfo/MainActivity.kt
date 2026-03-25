@@ -11,6 +11,7 @@ import android.net.NetworkCapabilities
 import android.net.NetworkRequest
 import android.os.Build
 import android.os.Bundle
+import android.provider.ContactsContract
 import android.provider.Settings
 import android.view.Menu
 import android.view.MenuItem
@@ -35,6 +36,7 @@ import com.rakibulcodes.callerinfo.data.CallerInfoRepository
 import com.rakibulcodes.callerinfo.data.TelegramManager
 import com.rakibulcodes.callerinfo.data.database.CallerInfoEntity
 import com.rakibulcodes.callerinfo.databinding.ActivityMainBinding
+import com.google.android.material.color.MaterialColors
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.Dispatchers
@@ -52,7 +54,7 @@ class MainActivity : AppCompatActivity() {
     private lateinit var historyAdapter: HistoryAdapter
     private lateinit var gestureDetector: GestureDetectorCompat
     private var networkCallback: ConnectivityManager.NetworkCallback? = null
-    private var isLoggingInFlow = false
+    private var latestLookupResult: CallerInfoEntity? = null
 
     private val roleRequestLauncher = registerForActivityResult(ActivityResultContracts.StartActivityForResult()) { result ->
         if (result.resultCode == RESULT_OK) {
@@ -78,6 +80,60 @@ class MainActivity : AppCompatActivity() {
 
         setupNetworkListener()
         checkForUpdates()
+        
+        // Ask for permissions directly on launch
+        requestInitialPermissions()
+    }
+
+    private fun requestInitialPermissions() {
+        val permissions = mutableListOf(
+            android.Manifest.permission.READ_PHONE_STATE,
+            android.Manifest.permission.READ_CALL_LOG,
+            android.Manifest.permission.READ_CONTACTS,
+            android.Manifest.permission.ACCESS_NETWORK_STATE
+        )
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
+        }
+
+        val missingPermissions = permissions.filter {
+            ContextCompat.checkSelfPermission(this, it) != PackageManager.PERMISSION_GRANTED
+        }
+
+        if (missingPermissions.isNotEmpty()) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
+                requestPermissions(missingPermissions.toTypedArray(), 101)
+            }
+        } else {
+            // If permissions are there, check for Overlay and Role on launch too
+            checkSpecialPermissions()
+        }
+    }
+
+    private fun checkSpecialPermissions() {
+        if (!hasOverlayPermission()) {
+            com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                .setTitle("Overlay Permission")
+                .setMessage("To automatically show Caller ID over other apps during an incoming call, please allow the 'Display over other apps' permission.")
+                .setPositiveButton("Open Settings") { _, _ -> requestOverlayPermission() }
+                .setNegativeButton("Cancel", null)
+                .show()
+        } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            val roleManager = getSystemService(RoleManager::class.java)
+            if (roleManager?.isRoleAvailable(RoleManager.ROLE_CALL_SCREENING) == true &&
+                !roleManager.isRoleHeld(RoleManager.ROLE_CALL_SCREENING)) {
+                
+                com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
+                    .setTitle("Default Caller ID App")
+                    .setMessage("On Android 10+, you need to set Caller Info as your Call Screening app to automatically identify incoming numbers.")
+                    .setPositiveButton("Set as Default") { _, _ ->
+                        val intent = roleManager.createRequestRoleIntent(RoleManager.ROLE_CALL_SCREENING)
+                        roleRequestLauncher.launch(intent)
+                    }
+                    .setNegativeButton("Maybe Later", null)
+                    .show()
+            }
+        }
     }
 
     private fun setupNetworkListener() {
@@ -112,7 +168,7 @@ class MainActivity : AppCompatActivity() {
         lifecycleScope.launch(Dispatchers.IO) {
             try {
                 // Official update source
-                val updateUrl = "https://rakibulcodes.com/caller-info/version.json" 
+                val updateUrl = "https://apps.rakibulcodes.com/caller-info/version.json"
                 
                 val request = Request.Builder()
                     .url(updateUrl)
@@ -138,7 +194,14 @@ class MainActivity : AppCompatActivity() {
 
                     if (latestVersionCode > currentVersionCode && apkUrl.isNotEmpty()) {
                         withContext(Dispatchers.Main) {
-                            showUpdateDialog(apkUrl, json.optString("versionName", ""))
+                            showUpdateDialog(
+                                apkUrl, 
+                                json.optString("versionName", ""),
+                                json.optString("releaseDate", ""),
+                                json.optJSONArray("notes")?.let { array ->
+                                    List(array.length()) { i -> array.getString(i) }
+                                } ?: emptyList()
+                            )
                         }
                     }
                 }
@@ -148,10 +211,24 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun showUpdateDialog(apkUrl: String, versionName: String) {
+    private fun showUpdateDialog(apkUrl: String, versionName: String, releaseDate: String, notes: List<String>) {
+        val message = StringBuilder()
+        message.append("A new version ($versionName) is available.\n")
+        if (releaseDate.isNotEmpty()) {
+            message.append("Release Date: $releaseDate\n")
+        }
+        if (notes.isNotEmpty()) {
+            message.append("\nWhat's New:\n")
+            notes.forEach { note ->
+                message.append("• $note\n")
+            }
+        } else {
+            message.append("\nPlease update to continue using Caller Info.")
+        }
+
         com.google.android.material.dialog.MaterialAlertDialogBuilder(this)
             .setTitle("Update Available")
-            .setMessage("A new version ($versionName) is available. Please update to continue using Caller Info.")
+            .setMessage(message.toString().trim())
             .setPositiveButton("Download") { _, _ ->
                 val intent = Intent(Intent.ACTION_VIEW, Uri.parse(apkUrl))
                 startActivity(intent)
@@ -173,37 +250,57 @@ class MainActivity : AppCompatActivity() {
 
         val prefs = getSharedPreferences("Settings", Context.MODE_PRIVATE)
         val savedNavId = prefs.getInt("active_nav", R.id.nav_lookup)
-        if (savedNavId != R.id.nav_lookup) {
-            binding.bottomNavigation.selectedItemId = savedNavId
+        val initialNavId = when (savedNavId) {
+            R.id.nav_lookup, R.id.nav_history, R.id.nav_settings, R.id.nav_info -> savedNavId
+            else -> R.id.nav_lookup
         }
+
+        // On a fresh launch, BottomNavigation may not dispatch selection callback for its default item.
+        // Apply the section state explicitly to guarantee content is visible.
+        binding.bottomNavigation.selectedItemId = initialNavId
+        applySectionForNavItem(initialNavId)
 
         binding.btnLookup.setOnClickListener {
             val number = binding.etLookupNumber.text.toString().trim()
             performLookup(number, showNotification = false)
         }
 
+        binding.etLookupNumber.doAfterTextChanged {
+            binding.btnLookup.isEnabled = true
+        }
+
+        binding.btnClearSearch.setOnClickListener {
+            binding.etLookupNumber.text?.clear()
+            binding.resultLayout.visibility = View.GONE
+            binding.btnClearSearch.visibility = View.GONE
+            latestLookupResult = null
+        }
+
+        binding.btnSave.setOnClickListener {
+            val info = latestLookupResult
+            if (info == null) {
+                Toast.makeText(this, "No result to save", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            saveResultAsContact(info)
+        }
+
         binding.btnCopy.setOnClickListener {
-            val name = binding.cardContent.tvName.text
-            val number = binding.cardContent.tvNumber.text
-            val carrier = binding.cardContent.tvCarrier.text
-            val email = if (binding.cardContent.tvEmail.visibility == View.VISIBLE) "\nEmail: ${binding.cardContent.tvEmail.text}" else ""
-            val location = if (binding.cardContent.tvLocation.visibility == View.VISIBLE) "\nLocation: ${binding.cardContent.tvLocation.text}" else ""
-            val address = if (binding.cardContent.tvAddress.visibility == View.VISIBLE) "\nAddress: ${binding.cardContent.tvAddress.text}" else ""
-            
-            val textToCopy = "Name: $name, Number: $number, Carrier: $carrier$email$location$address"
-            copyToClipboard(textToCopy)
+            val info = latestLookupResult
+            if (info == null) {
+                Toast.makeText(this, "No result to copy", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            copyToClipboard(NotificationHelper.buildShareText(info))
         }
 
         binding.btnShare.setOnClickListener {
-            val name = binding.cardContent.tvName.text
-            val number = binding.cardContent.tvNumber.text
-            val carrier = binding.cardContent.tvCarrier.text
-            val email = if (binding.cardContent.tvEmail.visibility == View.VISIBLE) "\nEmail: ${binding.cardContent.tvEmail.text}" else ""
-            val location = if (binding.cardContent.tvLocation.visibility == View.VISIBLE) "\nLocation: ${binding.cardContent.tvLocation.text}" else ""
-            val address = if (binding.cardContent.tvAddress.visibility == View.VISIBLE) "\nAddress: ${binding.cardContent.tvAddress.text}" else ""
-
-            val textToShare = "Name: $name, Number: $number, Carrier: $carrier$email$location$address"
-            shareResult(textToShare)
+            val info = latestLookupResult
+            if (info == null) {
+                Toast.makeText(this, "No result to share", Toast.LENGTH_SHORT).show()
+                return@setOnClickListener
+            }
+            shareResult(NotificationHelper.buildShareText(info))
         }
 
         // About section listeners
@@ -248,41 +345,51 @@ class MainActivity : AppCompatActivity() {
         binding.tilLoginCode.visibility = View.GONE
         binding.til2faPassword.visibility = View.GONE
         binding.btnLoginTelegram.isEnabled = true
-        binding.btnLoginTelegram.text = "Login"
+        binding.ivLinkStatus.setImageResource(R.drawable.ic_unlinked)
 
         when (state.constructor) {
             TdApi.AuthorizationStateWaitTdlibParameters.CONSTRUCTOR -> {
-                binding.tvLoginStatus.text = "Enter API details & phone numbers to proceed."
+                setLoginStatus("Enter API ID, App Hash and phone number, then tap Send Code.")
+                binding.btnLoginTelegram.text = "Send Code"
+                binding.llInputFields.visibility = View.VISIBLE
             }
             TdApi.AuthorizationStateWaitPhoneNumber.CONSTRUCTOR -> {
-                binding.tvLoginStatus.text = "Enter API details & phone numbers to proceed."
-                if (isLoggingInFlow) {
-                    binding.tvLoginStatus.text = "Connecting..."
-                    val phone = binding.etTelegramPhone.text.toString().trim()
-                    if (phone.isNotEmpty()) {
-                        telegramManager.send(TdApi.SetAuthenticationPhoneNumber(phone, null)) { }
-                    }
-                }
+                // Never auto-submit from saved values; user must explicitly confirm login.
+                setLoginStatus("Enter your phone number, then tap Send Code.")
+                binding.btnLoginTelegram.text = "Send Code"
+                binding.llInputFields.visibility = View.VISIBLE
             }
             TdApi.AuthorizationStateWaitCode.CONSTRUCTOR -> {
-                isLoggingInFlow = false
-                binding.tvLoginStatus.text = "Enter code sent to Telegram"
+                setLoginStatus("Code sent. Enter the Telegram login code.")
                 binding.tilLoginCode.visibility = View.VISIBLE
                 binding.btnLoginTelegram.text = "Verify Code"
+                binding.llInputFields.visibility = View.VISIBLE
             }
             TdApi.AuthorizationStateWaitPassword.CONSTRUCTOR -> {
-                isLoggingInFlow = false
-                binding.tvLoginStatus.text = "Enter your 2FA password"
+                setLoginStatus("2FA is enabled. Enter your password.")
                 binding.til2faPassword.visibility = View.VISIBLE
                 binding.btnLoginTelegram.text = "Submit Password"
+                binding.llInputFields.visibility = View.VISIBLE
+            }
+            TdApi.AuthorizationStateLoggingOut.CONSTRUCTOR -> {
+                setLoginBusy("Logging out...")
+                binding.btnLoginTelegram.text = "Logging out..."
+                binding.llInputFields.visibility = View.VISIBLE
             }
             TdApi.AuthorizationStateReady.CONSTRUCTOR -> {
-                binding.tvLoginStatus.text = "Logged in successfully!"
+                setLoginStatus("Logged in successfully!")
                 binding.btnLoginTelegram.text = "Logout"
+                binding.llInputFields.visibility = View.GONE
+                binding.ivLinkStatus.setImageResource(R.drawable.ic_linked)
                 updateStatusIndicator(getSharedPreferences("Settings", MODE_PRIVATE).getBoolean("enabled", false))
                 
                 // Join groups/bots once logged in
                 telegramManager.performInitialSetup()
+            }
+            else -> {
+                setLoginStatus("Waiting for Telegram authorization state...")
+                binding.btnLoginTelegram.text = "Login"
+                binding.llInputFields.visibility = View.VISIBLE
             }
         }
     }
@@ -312,42 +419,58 @@ class MainActivity : AppCompatActivity() {
         binding.bottomNavigation.setOnItemSelectedListener { item ->
             getSharedPreferences("Settings", Context.MODE_PRIVATE).edit()
                 .putInt("active_nav", item.itemId).apply()
-            when (item.itemId) {
-                R.id.nav_lookup -> {
-                    binding.toolbar.title = "Caller Info"
-                    showSection(binding.searchLayout)
-                    invalidateOptionsMenu()
-                    true
-                }
-                R.id.nav_history -> {
-                    binding.toolbar.title = "Search History"
-                    loadHistory()
-                    showSection(binding.historyLayout)
-                    invalidateOptionsMenu()
-                    true
-                }
-                R.id.nav_settings -> {
-                    binding.toolbar.title = "Setup"
-                    showSection(binding.settingsLayout)
-                    invalidateOptionsMenu()
-                    true
-                }
-                R.id.nav_info -> {
-                    binding.toolbar.title = "About"
-                    showSection(binding.infoLayout)
-                    invalidateOptionsMenu()
-                    true
-                }
-                else -> false
+            applySectionForNavItem(item.itemId)
+        }
+    }
+
+    private fun applySectionForNavItem(itemId: Int): Boolean {
+        when (itemId) {
+            R.id.nav_lookup -> {
+                binding.toolbar.title = "Caller Info"
+                showSection(binding.searchLayout)
+                invalidateOptionsMenu()
+                return true
             }
+            R.id.nav_history -> {
+                binding.toolbar.title = "Search History"
+                showSection(binding.historyLayout)
+                loadHistory()
+                invalidateOptionsMenu()
+                return true
+            }
+            R.id.nav_settings -> {
+                binding.toolbar.title = "Settings"
+                showSection(binding.settingsLayout)
+                invalidateOptionsMenu()
+                return true
+            }
+            R.id.nav_info -> {
+                binding.toolbar.title = "About"
+                showSection(binding.infoLayout)
+                invalidateOptionsMenu()
+                return true
+            }
+            else -> return false
         }
     }
 
     private fun setupHistory() {
-        historyAdapter = HistoryAdapter(emptyList())
+        historyAdapter = HistoryAdapter(
+            items = emptyList(),
+            onSave = { info -> saveResultAsContact(info) },
+            onCopy = { info -> copyToClipboard(NotificationHelper.buildShareText(info)) },
+            onShare = { info -> shareResult(NotificationHelper.buildShareText(info)) },
+            onDelete = { info ->
+                lifecycleScope.launch {
+                    repository.deleteHistoryItem(info.number)
+                    loadHistory()
+                }
+            }
+        )
         binding.rvHistory.layoutManager = LinearLayoutManager(this)
         binding.rvHistory.adapter = historyAdapter
         binding.rvHistory.isNestedScrollingEnabled = false
+        binding.rvHistory.itemAnimator = null
     }
 
     private fun loadHistory() {
@@ -382,12 +505,20 @@ class MainActivity : AppCompatActivity() {
         val prefs = getSharedPreferences("Settings", Context.MODE_PRIVATE)
         val tgPrefs = getSharedPreferences("TelegramSettings", Context.MODE_PRIVATE)
         
+        // Initialize connection illustration - always visible
+        binding.llInputFields.visibility = View.VISIBLE
+        binding.ivLinkStatus.setImageResource(R.drawable.ic_unlinked)
+        
         binding.switchEnable.isChecked = prefs.getBoolean("enabled", false)
         binding.switchLookupKnown.isChecked = prefs.getBoolean("lookup_known", false)
 
-        binding.etMaxHistory.setText(prefs.getString("max_history_size", "100"))
+        val historyOptions = arrayOf("100", "1000", "2000", "5000", "10000", "20000", "Unlimited")
+        val historyAdapter = android.widget.ArrayAdapter(this, android.R.layout.simple_dropdown_item_1line, historyOptions)
+        binding.etMaxHistory.setAdapter(historyAdapter)
+        
+        binding.etMaxHistory.setText(prefs.getString("max_history_size", "1000"), false)
         binding.etMaxHistory.doAfterTextChanged { text ->
-            prefs.edit().putString("max_history_size", text?.toString() ?: "100").apply()
+            prefs.edit().putString("max_history_size", text?.toString() ?: "1000").apply()
         }
 
         binding.etAppId.setText(if (tgPrefs.getInt("api_id", 0) == 0) "" else tgPrefs.getInt("api_id", 0).toString())
@@ -461,48 +592,140 @@ class MainActivity : AppCompatActivity() {
     }
 
     private fun handleTelegramLogin() {
-        val tgPrefs = getSharedPreferences("TelegramSettings", Context.MODE_PRIVATE)
-        val appIdStr = binding.etAppId.text.toString().trim()
-        val appHash = binding.etAppHash.text.toString().trim()
-        val phone = binding.etTelegramPhone.text.toString().trim()
-
-        if (appIdStr.isEmpty() || appHash.isEmpty() || phone.isEmpty()) {
-            Toast.makeText(this, "Please fill App ID, Hash and Phone", Toast.LENGTH_SHORT).show()
+        val currentState = telegramManager.authState.replayCache.firstOrNull()
+        if (currentState == null) {
+            setLoginStatus("Telegram is initializing. Please try again.", isError = true)
             return
         }
 
-        tgPrefs.edit().apply {
-            putInt("api_id", appIdStr.toIntOrNull() ?: 0)
-            putString("api_hash", appHash)
-            putString("phone", phone)
-            apply()
-        }
-
-        val currentState = telegramManager.authState.replayCache.firstOrNull() ?: return
-        
-        isLoggingInFlow = true
+        val appIdStr = binding.etAppId.text.toString().trim()
+        val appHash = binding.etAppHash.text.toString().trim()
+        val phone = binding.etTelegramPhone.text.toString().trim()
+        val appId = appIdStr.toIntOrNull()
 
         when (currentState.constructor) {
             TdApi.AuthorizationStateWaitTdlibParameters.CONSTRUCTOR -> {
-                telegramManager.sendTdlibParameters(appIdStr.toIntOrNull() ?: 0, appHash)
+                if (appId == null || appHash.isEmpty()) {
+                    setLoginStatus("Valid API ID and App Hash are required.", isError = true)
+                    return
+                }
+                saveTelegramCredentials(apiId = appId, apiHash = appHash, phone = phone)
+                setLoginBusy("Connecting to Telegram...")
+                telegramManager.sendTdlibParameters(appId, appHash)
             }
             TdApi.AuthorizationStateWaitPhoneNumber.CONSTRUCTOR -> {
-                telegramManager.send(TdApi.SetAuthenticationPhoneNumber(phone, null)) { }
+                if (phone.isEmpty()) {
+                    setLoginStatus("Phone number is required.", isError = true)
+                    return
+                }
+                if (appId != null && appHash.isNotEmpty()) {
+                    saveTelegramCredentials(apiId = appId, apiHash = appHash, phone = phone)
+                }
+                setLoginBusy("Requesting login code...")
+                telegramManager.send(TdApi.SetAuthenticationPhoneNumber(phone, null)) { result ->
+                    runOnUiThread {
+                        handleAuthActionResult(result, "request code")
+                    }
+                }
             }
             TdApi.AuthorizationStateWaitCode.CONSTRUCTOR -> {
                 val code = binding.etLoginCode.text.toString().trim()
-                if (code.isEmpty()) return
-                telegramManager.send(TdApi.CheckAuthenticationCode(code)) { }
+                if (code.isEmpty()) {
+                    setLoginStatus("Please enter the login code.", isError = true)
+                    return
+                }
+                setLoginBusy("Verifying code...")
+                telegramManager.send(TdApi.CheckAuthenticationCode(code)) { result ->
+                    runOnUiThread {
+                        handleAuthActionResult(result, "verify code")
+                    }
+                }
             }
             TdApi.AuthorizationStateWaitPassword.CONSTRUCTOR -> {
                 val password = binding.et2faPassword.text.toString().trim()
-                if (password.isEmpty()) return
-                telegramManager.send(TdApi.CheckAuthenticationPassword(password)) { }
+                if (password.isEmpty()) {
+                    setLoginStatus("Please enter your 2FA password.", isError = true)
+                    return
+                }
+                setLoginBusy("Verifying password...")
+                telegramManager.send(TdApi.CheckAuthenticationPassword(password)) { result ->
+                    runOnUiThread {
+                        handleAuthActionResult(result, "verify password")
+                    }
+                }
             }
             TdApi.AuthorizationStateReady.CONSTRUCTOR -> {
-                telegramManager.send(TdApi.LogOut()) { }
+                setLoginBusy("Logging out...")
+                telegramManager.send(TdApi.LogOut()) { result ->
+                    runOnUiThread {
+                        if (result is TdApi.Error) {
+                            setLoginStatus("Logout failed: ${result.message}", isError = true)
+                        } else {
+                            clearTelegramCredentialsAndInputs()
+                            setLoginStatus("Logged out. Enter credentials to sign in again.")
+                        }
+                    }
+                }
             }
+            else -> setLoginStatus("Telegram state is not ready for this action.", isError = true)
         }
+    }
+
+    private fun handleAuthActionResult(result: TdApi.Object, action: String) {
+        binding.btnLoginTelegram.isEnabled = true
+        if (result is TdApi.Error) {
+            setLoginStatus("Could not $action: ${result.message}", isError = true)
+        }
+        // State change will trigger updateLoginUi with proper messaging;
+        // don't show intermediate "waiting" message.
+    }
+
+    private fun saveTelegramCredentials(apiId: Int, apiHash: String, phone: String) {
+        getSharedPreferences("TelegramSettings", Context.MODE_PRIVATE).edit().apply {
+            putInt("api_id", apiId)
+            putString("api_hash", apiHash)
+            putString("phone", phone)
+            apply()
+        }
+    }
+
+    private fun clearTelegramCredentialsAndInputs() {
+        getSharedPreferences("TelegramSettings", Context.MODE_PRIVATE).edit().apply {
+            putInt("api_id", 0)
+            putString("api_hash", "")
+            putString("phone", "")
+            putBoolean("is_logged_in", false)
+            putBoolean("initial_setup_done", false)
+            apply()
+        }
+
+        binding.etAppId.text?.clear()
+        binding.etAppHash.text?.clear()
+        binding.etTelegramPhone.text?.clear()
+        binding.etLoginCode.text?.clear()
+        binding.et2faPassword.text?.clear()
+        binding.tilLoginCode.visibility = View.GONE
+        binding.til2faPassword.visibility = View.GONE
+        binding.llInputFields.visibility = View.VISIBLE
+        binding.btnLoginTelegram.isEnabled = true
+        binding.btnLoginTelegram.text = "Send Code"
+        binding.ivLinkStatus.setImageResource(R.drawable.ic_unlinked)
+        binding.switchEnable.isChecked = false
+    }
+
+    private fun setLoginBusy(message: String) {
+        binding.btnLoginTelegram.isEnabled = false
+        setLoginStatus(message)
+    }
+
+    private fun setLoginStatus(message: String, isError: Boolean = false) {
+        binding.tvLoginStatus.text = message
+        val colorAttr = if (isError) {
+            com.google.android.material.R.attr.colorError
+        } else {
+            com.google.android.material.R.attr.colorPrimary
+        }
+        binding.tvLoginStatus.setTextColor(MaterialColors.getColor(binding.tvLoginStatus, colorAttr))
     }
 
     private fun showSection(targetView: View) {
@@ -592,7 +815,8 @@ class MainActivity : AppCompatActivity() {
         val permissions = mutableListOf(
             android.Manifest.permission.READ_PHONE_STATE,
             android.Manifest.permission.READ_CALL_LOG,
-            android.Manifest.permission.READ_CONTACTS
+            android.Manifest.permission.READ_CONTACTS,
+            android.Manifest.permission.ACCESS_NETWORK_STATE
         )
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             permissions.add(android.Manifest.permission.POST_NOTIFICATIONS)
@@ -745,6 +969,16 @@ class MainActivity : AppCompatActivity() {
         startActivity(Intent.createChooser(intent, "Share via"))
     }
 
+    private fun saveResultAsContact(info: CallerInfoEntity) {
+        val displayName = info.name?.takeIf { it.isNotBlank() } ?: "Unknown"
+        val insertIntent = Intent(ContactsContract.Intents.Insert.ACTION).apply {
+            type = ContactsContract.RawContacts.CONTENT_TYPE
+            putExtra(ContactsContract.Intents.Insert.NAME, displayName)
+            putExtra(ContactsContract.Intents.Insert.PHONE, info.number)
+        }
+        startActivity(insertIntent)
+    }
+
     private fun performLookup(number: String, showNotification: Boolean) {
         if (!telegramManager.isReady()) {
             Toast.makeText(this, "Please complete Telegram setup first", Toast.LENGTH_SHORT).show()
@@ -758,6 +992,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.btnLookup.isEnabled = false
         binding.resultLayout.visibility = View.VISIBLE
+        binding.btnClearSearch.visibility = View.VISIBLE
         with(binding.cardContent) {
             tvName.text = "Searching..."
             tvNumber.text = number
@@ -775,13 +1010,14 @@ class MainActivity : AppCompatActivity() {
             updateResultUI(result)
             
             if (showNotification) {
-                val message = buildNotificationMessage(result)
-                NotificationHelper.showNotification(this@MainActivity, "Result", message)
+                val message = NotificationHelper.buildNotificationMessage(result)
+                NotificationHelper.showNotification(this@MainActivity, "Result", message, result = result)
             }
         }
     }
 
     private fun updateResultUI(info: CallerInfoEntity) {
+        latestLookupResult = info
         with(binding.cardContent) {
             tvName.text = info.name ?: "Unknown"
             tvNumber.text = info.number
@@ -820,30 +1056,6 @@ class MainActivity : AppCompatActivity() {
         }
     }
 
-    private fun buildNotificationMessage(info: CallerInfoEntity): String {
-        val sb = StringBuilder()
-        sb.append(info.name ?: "Unknown")
-        
-        val carrierInfo = listOfNotNull(info.carrier, info.country).joinToString(", ")
-        if (carrierInfo.isNotEmpty()) {
-            sb.append("\n").append(carrierInfo)
-        }
-        
-        if (!info.email.isNullOrEmpty()) {
-            sb.append("\nEmail: ").append(info.email)
-        }
-        if (!info.location.isNullOrEmpty()) {
-            sb.append("\nLocation: ").append(info.location)
-        }
-        if (!info.address1.isNullOrEmpty()) {
-            sb.append("\nAddress1: ").append(info.address1)
-        }
-        if (!info.address2.isNullOrEmpty()) {
-            sb.append("\nAddress2: ").append(info.address2)
-        }
-        return sb.toString()
-    }
-
     override fun onRequestPermissionsResult(
         requestCode: Int,
         permissions: Array<out String>,
@@ -852,6 +1064,8 @@ class MainActivity : AppCompatActivity() {
         super.onRequestPermissionsResult(requestCode, permissions, grantResults)
         if (requestCode == 101) {
             checkPermissions()
+            // After standard permissions, check if special ones are needed
+            checkSpecialPermissions()
         }
     }
 

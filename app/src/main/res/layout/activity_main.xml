@@ -53,7 +53,8 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:orientation="vertical"
-                android:padding="20dp">
+                android:padding="20dp"
+                android:visibility="gone">
 
                 <!-- Permission warning banner -->
                 <TextView
@@ -122,20 +123,41 @@
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-                <!-- Search button -->
-                <com.google.android.material.button.MaterialButton
-                    android:id="@+id/btnLookup"
+                <!-- Action buttons -->
+                <LinearLayout
                     android:layout_width="wrap_content"
-                    android:layout_height="48dp"
+                    android:layout_height="wrap_content"
                     android:layout_gravity="center_horizontal"
                     android:layout_marginTop="14dp"
-                    android:minWidth="120dp"
-                    android:paddingHorizontal="20dp"
-                    android:text="@string/btn_search"
-                    android:textAppearance="?attr/textAppearanceTitleMedium"
-                    app:cornerRadius="50dp"
-                    app:icon="@drawable/ic_search"
-                    app:iconGravity="textStart" />
+                    android:orientation="horizontal">
+
+                    <!-- Search button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnLookup"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:minWidth="120dp"
+                        android:paddingHorizontal="20dp"
+                        android:text="@string/btn_search"
+                        android:textAppearance="?attr/textAppearanceTitleMedium"
+                        app:cornerRadius="50dp"
+                        app:icon="@drawable/ic_search"
+                        app:iconGravity="textStart" />
+
+                    <!-- Clear button -->
+                    <com.google.android.material.button.MaterialButton
+                        android:id="@+id/btnClearSearch"
+                        style="?attr/materialButtonOutlinedStyle"
+                        android:layout_width="wrap_content"
+                        android:layout_height="48dp"
+                        android:layout_marginStart="12dp"
+                        android:text="Clear"
+                        android:visibility="gone"
+                        app:cornerRadius="50dp"
+                        app:icon="@drawable/ic_close"
+                        tools:visibility="visible" />
+
+                </LinearLayout>
 
                 <!-- Result section -->
                 <LinearLayout
@@ -173,15 +195,31 @@
                                 android:id="@+id/cardContent"
                                 layout="@layout/layout_caller_info_card_content" />
 
-                            <!-- Copy / Share row -->
+                            <!-- Save / Copy / Share row -->
                             <LinearLayout
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:layout_gravity="start"
                                 android:layout_marginStart="16dp"
-                                android:layout_marginBottom="12dp"
                                 android:layout_marginTop="4dp"
+                                android:layout_marginBottom="12dp"
                                 android:orientation="horizontal">
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/btnSave"
+                                    style="?attr/materialButtonOutlinedStyle"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="40dp"
+                                    android:layout_marginEnd="8dp"
+                                    android:minWidth="0dp"
+                                    android:paddingHorizontal="14dp"
+                                    android:text="@string/btn_save"
+                                    android:textAllCaps="false"
+                                    android:textSize="13sp"
+                                    app:cornerRadius="50dp"
+                                    app:icon="@drawable/ic_save_contact"
+                                    app:iconPadding="6dp"
+                                    app:iconSize="16dp" />
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/btnCopy"
@@ -196,8 +234,8 @@
                                     android:textSize="13sp"
                                     app:cornerRadius="50dp"
                                     app:icon="@drawable/ic_copy"
-                                    app:iconSize="16dp"
-                                    app:iconPadding="6dp" />
+                                    app:iconPadding="6dp"
+                                    app:iconSize="16dp" />
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/btnShare"
@@ -211,8 +249,8 @@
                                     android:textSize="13sp"
                                     app:cornerRadius="50dp"
                                     app:icon="@drawable/ic_share"
-                                    app:iconSize="16dp"
-                                    app:iconPadding="6dp" />
+                                    app:iconPadding="6dp"
+                                    app:iconSize="16dp" />
 
                             </LinearLayout>
                         </LinearLayout>
@@ -308,122 +346,190 @@
                         android:orientation="vertical"
                         android:padding="20dp">
 
-                        <TextView
+                        <!-- Connection Illustration (always visible, shows linked/unlinked status) -->
+                        <LinearLayout
+                            android:id="@+id/llConnectionIllustration"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:layout_marginBottom="16dp"
-                            android:text="@string/label_setup_instructions"
-                            android:autoLink="web"
-                            android:linksClickable="true"
-                            android:textAppearance="?attr/textAppearanceBodySmall"
-                            android:textColor="?attr/colorOnSurfaceVariant" />
+                            android:gravity="center"
+                            android:orientation="horizontal"
+                            android:padding="10dp">
 
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilAppId"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                            <!-- Caller Info Icon with circular background -->
+                            <FrameLayout
+                                android:layout_width="56dp"
+                                android:layout_height="56dp"
+                                android:layout_marginEnd="12dp">
+
+                                <View
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:background="@drawable/bg_circle_primary"
+                                    android:alpha="0.2" />
+
+                                <ImageView
+                                    android:layout_width="32dp"
+                                    android:layout_height="32dp"
+                                    android:layout_gravity="center"
+                                    android:src="@drawable/ic_notification_icon"
+                                    app:tint="?attr/colorPrimary" />
+                            </FrameLayout>
+
+                            <!-- Link Status Icon (no background) -->
+                            <ImageView
+                                android:id="@+id/ivLinkStatus"
+                                android:layout_width="28dp"
+                                android:layout_height="28dp"
+                                android:layout_marginStart="10dp"
+                                android:layout_marginEnd="10dp"
+                                android:src="@drawable/ic_unlinked"
+                                app:tint="?attr/colorPrimary" />
+
+                            <!-- Telegram Icon with circular background -->
+                            <FrameLayout
+                                android:layout_width="56dp"
+                                android:layout_height="56dp"
+                                android:layout_marginStart="12dp">
+
+                                <View
+                                    android:layout_width="match_parent"
+                                    android:layout_height="match_parent"
+                                    android:background="@drawable/bg_circle_primary"
+                                    android:alpha="0.2" />
+
+                                <ImageView
+                                    android:layout_width="32dp"
+                                    android:layout_height="32dp"
+                                    android:layout_gravity="center"
+                                    android:src="@drawable/ic_telegram"
+                                    app:tint="?attr/colorPrimary" />
+                            </FrameLayout>
+                        </LinearLayout>
+
+                        <!-- Input Fields Container (hidden when connected) -->
+                        <LinearLayout
+                            android:id="@+id/llInputFields"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            android:hint="App ID"
-                            app:endIconMode="password_toggle"
-                            app:boxCornerRadiusBottomEnd="28dp"
-                            app:boxCornerRadiusBottomStart="28dp"
-                            app:boxCornerRadiusTopEnd="28dp"
-                            app:boxCornerRadiusTopStart="28dp">
+                            android:orientation="vertical">
 
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etAppId"
+                            <TextView
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:inputType="numberPassword" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                                android:layout_marginBottom="16dp"
+                                android:autoLink="web"
+                                android:linksClickable="true"
+                                android:text="@string/label_setup_instructions"
+                                android:textAppearance="?attr/textAppearanceBodySmall"
+                                android:textColor="?attr/colorOnSurfaceVariant" />
 
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilAppHash"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:hint="App Hash"
-                            app:endIconMode="password_toggle"
-                            app:boxCornerRadiusBottomEnd="28dp"
-                            app:boxCornerRadiusBottomStart="28dp"
-                            app:boxCornerRadiusTopEnd="28dp"
-                            app:boxCornerRadiusTopStart="28dp">
-
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etAppHash"
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/tilAppId"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:inputType="textPassword" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                                android:hint="App ID"
+                                app:boxCornerRadiusBottomEnd="28dp"
+                                app:boxCornerRadiusBottomStart="28dp"
+                                app:boxCornerRadiusTopEnd="28dp"
+                                app:boxCornerRadiusTopStart="28dp"
+                                app:endIconMode="password_toggle">
 
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilTelegramPhone"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:hint="@string/hint_phone"
-                            app:endIconMode="password_toggle"
-                            app:boxCornerRadiusBottomEnd="28dp"
-                            app:boxCornerRadiusBottomStart="28dp"
-                            app:boxCornerRadiusTopEnd="28dp"
-                            app:boxCornerRadiusTopStart="28dp">
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/etAppId"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="numberPassword" />
+                            </com.google.android.material.textfield.TextInputLayout>
 
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etTelegramPhone"
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/tilAppHash"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:inputType="textPassword" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                                android:layout_marginTop="12dp"
+                                android:hint="App Hash"
+                                app:boxCornerRadiusBottomEnd="28dp"
+                                app:boxCornerRadiusBottomStart="28dp"
+                                app:boxCornerRadiusTopEnd="28dp"
+                                app:boxCornerRadiusTopStart="28dp"
+                                app:endIconMode="password_toggle">
 
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/tilLoginCode"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:hint="@string/hint_code"
-                            android:visibility="gone"
-                            app:boxCornerRadiusBottomEnd="28dp"
-                            app:boxCornerRadiusBottomStart="28dp"
-                            app:boxCornerRadiusTopEnd="28dp"
-                            app:boxCornerRadiusTopStart="28dp">
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/etAppHash"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="textPassword" />
+                            </com.google.android.material.textfield.TextInputLayout>
 
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/etLoginCode"
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/tilTelegramPhone"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:inputType="number" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                                android:layout_marginTop="12dp"
+                                android:hint="@string/hint_phone"
+                                app:boxCornerRadiusBottomEnd="28dp"
+                                app:boxCornerRadiusBottomStart="28dp"
+                                app:boxCornerRadiusTopEnd="28dp"
+                                app:boxCornerRadiusTopStart="28dp"
+                                app:endIconMode="password_toggle">
 
-                        <com.google.android.material.textfield.TextInputLayout
-                            android:id="@+id/til2faPassword"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                            android:layout_width="match_parent"
-                            android:layout_height="wrap_content"
-                            android:layout_marginTop="12dp"
-                            android:hint="@string/hint_password"
-                            android:visibility="gone"
-                            app:boxCornerRadiusBottomEnd="28dp"
-                            app:boxCornerRadiusBottomStart="28dp"
-                            app:boxCornerRadiusTopEnd="28dp"
-                            app:boxCornerRadiusTopStart="28dp"
-                            app:passwordToggleEnabled="true">
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/etTelegramPhone"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="textPassword" />
+                            </com.google.android.material.textfield.TextInputLayout>
 
-                            <com.google.android.material.textfield.TextInputEditText
-                                android:id="@+id/et2faPassword"
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/tilLoginCode"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:inputType="textPassword" />
-                        </com.google.android.material.textfield.TextInputLayout>
+                                android:layout_marginTop="12dp"
+                                android:hint="@string/hint_code"
+                                android:visibility="gone"
+                                app:boxCornerRadiusBottomEnd="28dp"
+                                app:boxCornerRadiusBottomStart="28dp"
+                                app:boxCornerRadiusTopEnd="28dp"
+                                app:boxCornerRadiusTopStart="28dp">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/etLoginCode"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="number" />
+                            </com.google.android.material.textfield.TextInputLayout>
+
+                            <com.google.android.material.textfield.TextInputLayout
+                                android:id="@+id/til2faPassword"
+                                style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
+                                android:layout_width="match_parent"
+                                android:layout_height="wrap_content"
+                                android:layout_marginTop="12dp"
+                                android:hint="@string/hint_password"
+                                android:visibility="gone"
+                                app:boxCornerRadiusBottomEnd="28dp"
+                                app:boxCornerRadiusBottomStart="28dp"
+                                app:boxCornerRadiusTopEnd="28dp"
+                                app:boxCornerRadiusTopStart="28dp"
+                                app:passwordToggleEnabled="true">
+
+                                <com.google.android.material.textfield.TextInputEditText
+                                    android:id="@+id/et2faPassword"
+                                    android:layout_width="match_parent"
+                                    android:layout_height="wrap_content"
+                                    android:inputType="textPassword" />
+                            </com.google.android.material.textfield.TextInputLayout>
+                        </LinearLayout>
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/btnLoginTelegram"
                             android:layout_width="wrap_content"
                             android:layout_height="wrap_content"
                             android:layout_gravity="center_horizontal"
-                            android:layout_marginTop="20dp"
+                            android:layout_marginTop="16dp"
                             android:text="@string/btn_login_telegram"
                             app:cornerRadius="50dp" />
 
@@ -510,11 +616,11 @@
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
                             android:layout_marginTop="12dp"
+                            android:clickable="true"
+                            android:focusable="true"
                             android:text="@string/msg_battery_opt"
                             android:textAppearance="?attr/textAppearanceBodySmall"
-                            android:textColor="?attr/colorPrimary"
-                            android:clickable="true"
-                            android:focusable="true"/>
+                            android:textColor="?attr/colorPrimary" />
 
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -551,7 +657,7 @@
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
-                                android:text="Search Known Numbers"
+                                android:text="Include Saved Contacts"
                                 android:textAppearance="?attr/textAppearanceTitleMedium"
                                 android:textColor="?attr/colorOnSurface" />
 
@@ -595,27 +701,38 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
-                        android:orientation="vertical"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal"
                         android:padding="20dp">
+
+                        <TextView
+                            android:layout_width="0dp"
+                            android:layout_height="wrap_content"
+                            android:layout_weight="1"
+                            android:text="Max History Logs"
+                            android:textAppearance="?attr/textAppearanceBodyLarge"
+                            android:textColor="?attr/colorOnSurface" />
 
                         <com.google.android.material.textfield.TextInputLayout
                             android:id="@+id/tilMaxHistory"
-                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox"
-                            android:layout_width="match_parent"
+                            style="@style/Widget.Material3.TextInputLayout.OutlinedBox.ExposedDropdownMenu"
+                            android:layout_width="140dp"
                             android:layout_height="wrap_content"
-                            android:hint="Max History Logs"
+                            android:hint=""
                             app:boxCornerRadiusBottomEnd="28dp"
                             app:boxCornerRadiusBottomStart="28dp"
                             app:boxCornerRadiusTopEnd="28dp"
-                            app:boxCornerRadiusTopStart="28dp"
-                            app:startIconDrawable="@drawable/ic_history">
+                            app:boxCornerRadiusTopStart="28dp">
 
-                            <com.google.android.material.textfield.TextInputEditText
+                            <com.google.android.material.textfield.MaterialAutoCompleteTextView
                                 android:id="@+id/etMaxHistory"
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                android:inputType="number"
-                                android:text="100" />
+                                android:inputType="none"
+                                android:paddingTop="12dp"
+                                android:paddingBottom="12dp"
+                                android:paddingStart="16dp"
+                                android:text="1000" />
                         </com.google.android.material.textfield.TextInputLayout>
 
                     </LinearLayout>
@@ -657,8 +774,8 @@
                             android:id="@+id/toggleTheme"
                             android:layout_width="match_parent"
                             android:layout_height="wrap_content"
-                            app:singleSelection="true"
-                            app:selectionRequired="true">
+                            app:selectionRequired="true"
+                            app:singleSelection="true">
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnThemeLight"
@@ -731,17 +848,25 @@
                         android:textAppearance="?attr/textAppearanceBodyMedium"
                         android:textColor="?attr/colorOnSurfaceVariant" />
 
-                    <TextView
-                        android:id="@+id/appVersionText"
+                    <com.google.android.material.card.MaterialCardView
                         android:layout_width="wrap_content"
                         android:layout_height="wrap_content"
                         android:layout_marginTop="8dp"
-                        tools:text="Version 1.0"
-                        android:textAppearance="?attr/textAppearanceLabelMedium"
-                        android:textColor="?attr/colorPrimary"
-                        android:background="?attr/colorSurfaceVariant"
-                        android:paddingHorizontal="12dp"
-                        android:paddingVertical="4dp"/>
+                        app:cardBackgroundColor="?attr/colorSurfaceVariant"
+                        app:cardCornerRadius="12dp"
+                        app:cardElevation="0dp"
+                        app:strokeWidth="0dp">
+
+                        <TextView
+                            android:id="@+id/appVersionText"
+                            android:layout_width="wrap_content"
+                            android:layout_height="wrap_content"
+                            android:paddingHorizontal="12dp"
+                            android:paddingVertical="4dp"
+                            android:textAppearance="?attr/textAppearanceLabelMedium"
+                            android:textColor="?attr/colorPrimary"
+                            tools:text="Version 1.0" />
+                    </com.google.android.material.card.MaterialCardView>
 
                 </LinearLayout>
 
@@ -771,37 +896,37 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:padding="20dp"
-                        android:background="?attr/selectableItemBackground">
-                        
+                        android:padding="20dp">
+
                         <ImageView
                             android:layout_width="32dp"
                             android:layout_height="32dp"
                             android:src="@drawable/ic_globe"
                             app:tint="?attr/colorPrimary" />
-                            
+
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
                             android:layout_marginStart="16dp"
+                            android:layout_weight="1"
                             android:orientation="vertical">
-                            
+
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="apps.rakibulcodes.com/caller-info"
                                 android:textAppearance="?attr/textAppearanceTitleMedium"
-                                android:textStyle="bold"/>
-                                
+                                android:textStyle="bold" />
+
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="Official app website and updates"
                                 android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?attr/colorOnSurfaceVariant"/>
+                                android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
@@ -822,10 +947,10 @@
                     <LinearLayout
                         android:layout_width="match_parent"
                         android:layout_height="wrap_content"
+                        android:background="?attr/selectableItemBackground"
                         android:gravity="center_vertical"
                         android:orientation="horizontal"
-                        android:padding="20dp"
-                        android:background="?attr/selectableItemBackground">
+                        android:padding="20dp">
 
                         <ImageView
                             android:layout_width="32dp"
@@ -836,8 +961,8 @@
                         <LinearLayout
                             android:layout_width="0dp"
                             android:layout_height="wrap_content"
-                            android:layout_weight="1"
                             android:layout_marginStart="16dp"
+                            android:layout_weight="1"
                             android:orientation="vertical">
 
                             <TextView
@@ -845,19 +970,19 @@
                                 android:layout_height="wrap_content"
                                 android:text="Source Code"
                                 android:textAppearance="?attr/textAppearanceTitleMedium"
-                                android:textStyle="bold"/>
+                                android:textStyle="bold" />
 
                             <TextView
                                 android:layout_width="wrap_content"
                                 android:layout_height="wrap_content"
                                 android:text="github.com/rakibulcodes/caller-info"
                                 android:textAppearance="?attr/textAppearanceBodySmall"
-                                android:textColor="?attr/colorOnSurfaceVariant"/>
+                                android:textColor="?attr/colorOnSurfaceVariant" />
                         </LinearLayout>
                     </LinearLayout>
                 </com.google.android.material.card.MaterialCardView>
 
-<!-- Developer section header -->
+                <!-- Developer section header -->
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
@@ -910,25 +1035,26 @@
                                 android:layout_height="wrap_content"
                                 android:layout_marginEnd="4dp"
                                 android:layout_weight="1"
-                                android:text="@string/btn_website"
-                                app:cornerRadius="50dp"
-                                app:iconGravity="textStart"
                                 android:minWidth="0dp"
                                 android:padding="8dp"
-                                app:icon="@drawable/ic_globe" />
+                                android:text="@string/btn_website"
+                                app:cornerRadius="50dp"
+                                app:icon="@drawable/ic_globe"
+                                app:iconGravity="textStart" />
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/btnInfoGithub"
                                 style="@style/Widget.Material3.Button.TonalButton"
                                 android:layout_width="0dp"
                                 android:layout_height="wrap_content"
+                                android:layout_marginEnd="4dp"
                                 android:layout_weight="1"
-                                android:text="@string/btn_github"
-                                app:cornerRadius="50dp"
-                                app:iconGravity="textStart"
                                 android:minWidth="0dp"
                                 android:padding="8dp"
-                                app:icon="@drawable/ic_github" />
+                                android:text="@string/btn_github"
+                                app:cornerRadius="50dp"
+                                app:icon="@drawable/ic_github"
+                                app:iconGravity="textStart" />
 
                         </LinearLayout>
                     </LinearLayout>

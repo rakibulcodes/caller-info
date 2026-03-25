@@ -61,6 +61,59 @@
                         android:layout_marginStart="8dp"
                         android:background="@drawable/bg_circle_status"
                         android:backgroundTint="@android:color/darker_gray" />
+
+                    <View
+                        android:layout_width="1dp"
+                        android:layout_height="18dp"
+                        android:layout_marginStart="12dp"
+                        android:layout_marginEnd="12dp"
+                        android:background="?attr/colorOnSurfaceVariant"
+                        android:alpha="0.45" />
+
+                    <LinearLayout
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:gravity="center_vertical"
+                        android:orientation="horizontal">
+
+                        <ImageView
+                            android:id="@+id/btnOverlaySave"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_marginEnd="10dp"
+                            android:clickable="true"
+                            android:contentDescription="Save contact"
+                            android:focusable="true"
+                            android:foreground="?attr/selectableItemBackgroundBorderless"
+                            android:padding="1dp"
+                            android:src="@drawable/ic_save_contact"
+                            app:tint="?attr/colorOnSurfaceVariant" />
+
+                        <ImageView
+                            android:id="@+id/btnOverlayCopy"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:layout_marginEnd="10dp"
+                            android:clickable="true"
+                            android:contentDescription="Copy result"
+                            android:focusable="true"
+                            android:foreground="?attr/selectableItemBackgroundBorderless"
+                            android:padding="1dp"
+                            android:src="@drawable/ic_copy"
+                            app:tint="?attr/colorOnSurfaceVariant" />
+
+                        <ImageView
+                            android:id="@+id/btnOverlayShare"
+                            android:layout_width="20dp"
+                            android:layout_height="20dp"
+                            android:clickable="true"
+                            android:contentDescription="Share result"
+                            android:focusable="true"
+                            android:foreground="?attr/selectableItemBackgroundBorderless"
+                            android:padding="1dp"
+                            android:src="@drawable/ic_share"
+                            app:tint="?attr/colorOnSurfaceVariant" />
+                    </LinearLayout>
                 </LinearLayout>
 
                 <com.google.android.material.button.MaterialButton

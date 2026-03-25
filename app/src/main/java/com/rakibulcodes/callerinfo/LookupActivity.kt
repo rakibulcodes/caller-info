@@ -40,11 +40,12 @@ class LookupActivity : AppCompatActivity() {
                 lifecycleScope.launch {
                     try {
                         val result = repository.getCallerInfo(sanitizedNumber)
-                        val message = buildNotificationMessage(result)
+                        val message = NotificationHelper.buildNotificationMessage(result)
                         NotificationHelper.showNotification(
                             this@LookupActivity,
-                            "${result.number}",
-                            message
+                            result.number,
+                            message,
+                            result = result
                         )
                     } catch (e: Exception) {
                         // Silent fail or minimal toast
@@ -59,32 +60,5 @@ class LookupActivity : AppCompatActivity() {
         } ?: run {
             finish()
         }
-    }
-
-    private fun buildNotificationMessage(info: CallerInfoEntity): String {
-        val sb = StringBuilder()
-        sb.append(info.name ?: "Unknown")
-
-        val carrierInfo = listOfNotNull(info.carrier, info.country).joinToString(", ")
-        if (carrierInfo.isNotEmpty()) {
-            sb.append("\n").append(carrierInfo)
-        }
-
-        if (!info.email.isNullOrEmpty()) {
-            sb.append("\nEmail: ").append(info.email)
-        }
-        if (!info.location.isNullOrEmpty()) {
-            sb.append("\nLocation: ").append(info.location)
-        }
-        val fullAddress = listOfNotNull(info.address1, info.address2).joinToString("\n")
-        if (fullAddress.isNotEmpty()) {
-            sb.append("\nAddress: ").append(fullAddress)
-        }
-        
-        if (info.error != null) {
-            sb.append("\nError: ").append(info.error)
-        }
-        
-        return sb.toString()
     }
 }
