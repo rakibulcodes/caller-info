@@ -135,7 +135,7 @@ class CallerInfoRepository(private val context: Context) {
                         is TdApi.UpdateNewMessage -> {
                             val msg = obj.message
                             if (msg.chatId == chatId && !msg.isOutgoing && msg.id > sentMsgId) {
-                                val textObj = (msg.content as? TdApi.MessageText)?.text
+                                val textObj = extractFormattedText(msg.content)
                                 if (textObj != null) {
                                     val txt = textObj.text
                                     !txt.contains("Searching...") && (
@@ -152,7 +152,7 @@ class CallerInfoRepository(private val context: Context) {
                         }
                         is TdApi.UpdateMessageContent -> {
                             if (obj.chatId == chatId && obj.messageId > sentMsgId) {
-                                val textObj = (obj.newContent as? TdApi.MessageText)?.text
+                                val textObj = extractFormattedText(obj.newContent)
                                 if (textObj != null) {
                                     val txt = textObj.text
                                     !txt.contains("Searching...") && (
@@ -174,8 +174,8 @@ class CallerInfoRepository(private val context: Context) {
             
             if (update != null) {
                 val textObj = when (update) {
-                    is TdApi.UpdateNewMessage -> (update.message.content as? TdApi.MessageText)?.text
-                    is TdApi.UpdateMessageContent -> (update.newContent as? TdApi.MessageText)?.text
+                    is TdApi.UpdateNewMessage -> extractFormattedText(update.message.content)
+                    is TdApi.UpdateMessageContent -> extractFormattedText(update.newContent)
                     else -> null
                 }
                 
@@ -200,6 +200,17 @@ class CallerInfoRepository(private val context: Context) {
 
         } catch (e: Exception) {
             errorEntity(number, "Error: ${e.message}")
+        }
+    }
+
+    private fun extractFormattedText(content: TdApi.MessageContent): TdApi.FormattedText? {
+        return when (content) {
+            is TdApi.MessageText -> content.text
+            is TdApi.MessagePhoto -> content.caption
+            is TdApi.MessageVideo -> content.caption
+            is TdApi.MessageAnimation -> content.caption
+            is TdApi.MessageDocument -> content.caption
+            else -> null
         }
     }
 
